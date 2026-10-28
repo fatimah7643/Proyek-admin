@@ -1,8 +1,10 @@
 <?php
 // index.php
+session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax']);
 session_start();
 require_once __DIR__ . '/env.php';
 require_once __DIR__ . '/koneksi.php';
+require_once __DIR__ . '/lib/supabase.php';
 
 $hal  = $_GET['hal']  ?? 'dashboard';
 $aksi = $_GET['aksi'] ?? 'index';
@@ -31,8 +33,13 @@ if (!isset($peta[$hal][$aksi])) {
 }
 
 // Penjaga login: Jika bukan halaman login dan sesi user kosong, tendang ke login
-if ($hal !== 'login' && empty($_SESSION['user'])) {
+if ($hal !== 'login' && !sesi_valid()) {
+    $_SESSION = [];
     redirect('login');
+}
+
+if ($hal === 'login' && $aksi === 'index' && sesi_valid()) {
+    redirect('dashboard');
 }
 
 $file = ROOT_PATH . "/halaman/$hal/$aksi.php";

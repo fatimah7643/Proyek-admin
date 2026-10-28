@@ -1,25 +1,14 @@
 <?php
-// halaman/login/index.php
-if ($aksi === 'logout') {
-    session_destroy();
-    redirect('login');
-}
-
 $galat = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $stmt = $db->prepare('SELECT password FROM pengguna WHERE username = ?');
-    $stmt->bind_param('s', $_POST['username']);
-    $stmt->execute();
-    $baris = $stmt->get_result()->fetch_assoc();
-
-    if ($baris && password_verify($_POST['password'], $baris['password'])) {
-        session_regenerate_id(true);
-        $_SESSION['user'] = $_POST['username'];
+    $galat = supabase_login(trim($_POST['email'] ?? ''), $_POST['password'] ?? '');
+    if ($galat === null) {
         redirect('dashboard');
     }
-    $galat = 'Username atau password salah.';
 }
 ?>
+
+
 <!doctype html>
 <html lang="id">
 <head>
@@ -36,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <div class="alert alert-danger"><?= e($galat) ?></div>
         <?php endif; ?>
         <form method="post">
-          <input class="form-control mb-3" name="username" placeholder="Username" required>
+          <input class="form-control mb-3" type="email" name="email" placeholder="Email" required autofocus>
           <input class="form-control mb-3" type="password" name="password" placeholder="Password" required>
           <button class="btn btn-primary w-100">Masuk</button>
         </form>

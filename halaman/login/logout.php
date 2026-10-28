@@ -1,5 +1,4 @@
 <?php
-// halaman/login/logout.php
-$_SESSION = [];
-session_destroy();
+supabase_logout();
+session_start();
 redirect('login');
