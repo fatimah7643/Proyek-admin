@@ -11,8 +11,10 @@ $aksi = $_GET['aksi'] ?? 'index';
 
 // Daftar putih (whitelist) route => mode tampilan
 $peta = [
-    'dashboard' => ['index'  => 'layout'],
-    'login'     => ['index'  => 'mandiri', 'logout' => 'mandiri'],
+    'dashboard' => ['index' => 'layout'],
+    'beranda'   => ['index' => 'mandiri'],
+    'login'     => ['index' => 'mandiri', 'logout' => 'mandiri',
+                    'oauth' => 'mandiri', 'callback' => 'mandiri'],
     'buku'      => [
         'index'  => 'layout',
         'create' => 'layout',
@@ -26,37 +28,39 @@ $peta = [
     ],
 ];
 
-// Validasi Whitelist: Jika halaman/aksi tidak terdaftar, lempar error 404
 if (!isset($peta[$hal][$aksi])) {
     http_response_code(404);
     exit('Halaman tidak ditemukan.');
 }
 
-// Penjaga login: Jika bukan halaman login dan sesi user kosong, tendang ke login
-if ($hal !== 'login' && !sesi_valid()) {
-    $_SESSION = [];
-    redirect('login');
+// Penjaga: harus login, dan selain admin hanya boleh buka 'beranda'
+if ($hal !== 'login') {
+    if (!sesi_valid()) {
+        $_SESSION = [];
+        redirect('login');
+    }
+    if (peran_user() !== 'admin' && $hal !== 'beranda') {
+        redirect('beranda');
+    }
 }
 
+// Sudah login tapi buka halaman login -> arahkan sesuai peran
 if ($hal === 'login' && $aksi === 'index' && sesi_valid()) {
-    redirect('dashboard');
+    redirect(halaman_awal());
 }
 
 $file = ROOT_PATH . "/halaman/$hal/$aksi.php";
 $mode = $peta[$hal][$aksi];
 
-// Jika mode 'mandiri' (seperti cetak laporan atau login), langsung muat file halaman
 if ($mode === 'mandiri') {
-    require $file;           
+    require $file;
     exit;
 }
 
-// Jika mode 'layout': jalankan halaman DULU dan simpan ke dalam memori buffer (ob_start)
 ob_start();
 require $file;
 $konten = ob_get_clean();
 
-// Gabungkan kerangka AdminLTE dengan isi konten halaman
 require ROOT_PATH . '/template/header.php';
 require ROOT_PATH . '/template/sidebar.php';
 echo $konten;

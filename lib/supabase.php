@@ -24,7 +24,8 @@ function simpan_sesi(array $d): void {
     $_SESSION['access_token']  = $d['access_token'];
     $_SESSION['refresh_token'] = $d['refresh_token'] ?? '';
     $_SESSION['expires_at']    = (int) ($d['expires_at'] ?? (time() + (int) ($d['expires_in'] ?? 3600)));
-    $_SESSION['user']          = $d['user']['email'] ?? ($_SESSION['user'] ?? 'admin');
+    $u = $d['user'] ?? [];
+    $_SESSION['user'] = $u['email'] ?? ($u['user_metadata']['user_name'] ?? 'pengguna');
 }
 
 function supabase_login(string $email, string $password): ?string {
@@ -73,4 +74,30 @@ function jwt_payload(string $jwt): array {
     if (count($p) !== 3) return [];
     $b64 = strtr($p[1], '-_', '+/');
     return json_decode(base64_decode($b64 . str_repeat('=', (4 - strlen($b64) % 4) % 4)) ?: '', true) ?? [];
+}
+
+/** Peran user dari JWT (app_metadata.peran). Default: anggota. */
+function peran_user(): string {
+    $p = jwt_payload($_SESSION['access_token'] ?? '');
+    return $p['app_metadata']['peran'] ?? 'anggota';
+}
+
+function halaman_awal(): string {
+    return peran_user() === 'admin' ? 'dashboard' : 'beranda';
+}
+
+/** Daftar akun baru. Return [pesan_error|null, butuh_konfirmasi_email]. */
+function supabase_daftar(string $nama, string $email, string $password): array {
+    $r = supabase_request('POST', '/auth/v1/signup', [
+        'email' => $email, 'password' => $password, 'data' => ['nama' => $nama],
+    ]);
+    if ($r['status'] === 200 && !empty($r['data']['access_token'])) {
+        session_regenerate_id(true);
+        simpan_sesi($r['data']);
+        return [null, false];
+    }
+    if ($r['status'] === 200) {
+        return [null, true];   // akun dibuat, tapi perlu konfirmasi email
+    }
+    return [$r['data']['msg'] ?? $r['data']['message'] ?? 'Pendaftaran gagal.', false];
 }
