@@ -1,5 +1,5 @@
 <?php
-// halaman/login/callback.php
+// halaman/login/callback.php — balik dari Google/GitHub
 $kode     = $_GET['code'] ?? '';
 $verifier = $_SESSION['pkce_verifier'] ?? '';
 unset($_SESSION['pkce_verifier']);
@@ -16,8 +16,12 @@ $r = supabase_request('POST', '/auth/v1/token?grant_type=pkce', [
 
 if ($r['status'] === 200 && !empty($r['data']['access_token'])) {
     session_regenerate_id(true);
-    simpan_sesi($r['data']);
-    redirect(halaman_awal());
+    $galat = simpan_sesi($r['data']);   // cek database + ambil role
+    if ($galat === null) {
+        redirect(halaman_awal());
+    }
+    $_SESSION['galat_login'] = $galat;
+    redirect('login');
 }
 
 $_SESSION['galat_login'] = 'Gagal menyelesaikan login. Coba lagi.';

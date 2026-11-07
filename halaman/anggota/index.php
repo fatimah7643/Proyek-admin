@@ -3,6 +3,10 @@
 $judulHalaman = 'Data Anggota';
 
 if (isset($_GET['hapus'])) {              // aksi hapus lewat POST di praktik nyata
+    if (peran_user() !== 'admin') {
+      http_response_code(403);
+      exit('Hanya admin yang boleh menghapus anggota.');
+    }
     $stmt = $db->prepare('DELETE FROM anggota WHERE id = ?');
     $stmt->bind_param('i', $_GET['hapus']);
     $stmt->execute();
@@ -38,8 +42,10 @@ $hasil = $db->query('SELECT * FROM anggota ORDER BY id DESC');
               <td><?= e($a['email']) ?></td>
               <td>
                 <a href="<?= BASE_URL ?>index.php?hal=anggota&aksi=update&id=<?= (int)$a['id'] ?>" class="btn btn-warning btn-sm">Edit</a>
-                <a href="<?= BASE_URL ?>index.php?hal=anggota&hapus=<?= (int)$a['id'] ?>"
-                   onclick="return confirm('Hapus anggota ini?')" class="btn btn-danger btn-sm">Hapus</a>
+                                <?php if (peran_user() === 'admin'): ?>
+                                <a href="<?= BASE_URL ?>index.php?hal=anggota&hapus=<?= (int)$a['id'] ?>"
+                                  onclick="return confirm('Hapus anggota ini?')" class="btn btn-danger btn-sm">Hapus</a>
+                                <?php endif; ?>
               </td>
             </tr>
           <?php endwhile; ?>

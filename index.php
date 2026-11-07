@@ -5,6 +5,7 @@ session_start();
 require_once __DIR__ . '/env.php';
 require_once __DIR__ . '/koneksi.php';
 require_once __DIR__ . '/lib/supabase.php';
+require_once __DIR__ . '/lib/akses.php';
 
 $hal  = $_GET['hal']  ?? 'dashboard';
 $aksi = $_GET['aksi'] ?? 'index';
@@ -13,8 +14,14 @@ $aksi = $_GET['aksi'] ?? 'index';
 $peta = [
     'dashboard' => ['index' => 'layout'],
     'beranda'   => ['index' => 'mandiri'],
-    'login'     => ['index' => 'mandiri', 'logout' => 'mandiri',
-                    'oauth' => 'mandiri', 'callback' => 'mandiri'],
+    'login'     => [
+                    'index' => 'mandiri', 
+                    'logout' => 'mandiri', 
+                    'oauth' => 'mandiri',
+                    'callback' => 'mandiri', 
+                    'api' => 'mandiri', 
+                    'lupa' => 'mandiri'
+                    ],
     'buku'      => [
         'index'  => 'layout',
         'create' => 'layout',
@@ -33,18 +40,18 @@ if (!isset($peta[$hal][$aksi])) {
     exit('Halaman tidak ditemukan.');
 }
 
-// Penjaga: harus login, dan selain admin hanya boleh buka 'beranda'
+// Penjaga: harus login, lalu cek hak akses sesuai role dari database
 if ($hal !== 'login') {
     if (!sesi_valid()) {
         $_SESSION = [];
         redirect('login');
     }
-    if (peran_user() !== 'admin' && $hal !== 'beranda') {
-        redirect('beranda');
+    if (!boleh_akses($hal)) {
+        redirect(halaman_awal());
     }
 }
 
-// Sudah login tapi buka halaman login -> arahkan sesuai peran
+// Sudah login tapi buka halaman login -> arahkan sesuai role
 if ($hal === 'login' && $aksi === 'index' && sesi_valid()) {
     redirect(halaman_awal());
 }

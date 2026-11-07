@@ -2,40 +2,35 @@
 // halaman/login/index.php — login / daftar via Supabase Auth (JWT)
 $galat = $_SESSION['galat_login'] ?? '';
 unset($_SESSION['galat_login']);
-$info  = '';
-$peran = in_array($_POST['peran'] ?? '', ['admin', 'anggota'], true) ? $_POST['peran'] : '';
-$mode  = ($_POST['mode'] ?? '') === 'daftar' ? 'daftar' : 'masuk';
+$info = $_SESSION['info_login'] ?? '';
+unset($_SESSION['info_login']);
+$mode = ($_POST['mode'] ?? '') === 'daftar' ? 'daftar' : 'masuk';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $pass  = $_POST['password'] ?? '';
 
-    if ($mode === 'daftar' && $peran === 'anggota') {
+    if ($mode === 'daftar') {
         if (strlen($pass) < 8) {
             $galat = 'Kata sandi minimal 8 karakter.';
         } elseif ($pass !== ($_POST['password2'] ?? '')) {
             $galat = 'Konfirmasi kata sandi tidak sama.';
         } else {
-            [$galat, $butuhKonfirmasi] = supabase_daftar(trim($_POST['nama'] ?? ''), $email, $pass);
-            if ($galat === null && !$butuhKonfirmasi) {
+            [$status, $pesan] = daftar_publik($db, trim($_POST['nama'] ?? ''), $email, $pass);
+            if ($status === 'masuk') {
                 redirect(halaman_awal());
             }
-            if ($galat === null) {
-                $galat = '';
-                $info  = 'Pendaftaran berhasil. Cek email kamu untuk konfirmasi, lalu masuk.';
-                $mode  = 'masuk';
+            if ($status === 'konfirmasi') {
+                $info = $pesan;
+            } else {
+                $galat = $pesan;   // 'ada' atau 'galat'
             }
+            $mode = $status === 'galat' ? 'daftar' : 'masuk';
         }
     } else {
         $galat = supabase_login($email, $pass);
         if ($galat === null) {
-            if ($peran === 'admin' && peran_user() !== 'admin') {
-                supabase_request('POST', '/auth/v1/logout', null, $_SESSION['access_token']);
-                $_SESSION = [];
-                $galat = 'Akun ini bukan admin.';
-            } else {
-                redirect(halaman_awal());
-            }
+            redirect(halaman_awal());
         }
     }
 }
@@ -82,21 +77,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .tampil { animation: masuk .38s ease both; }
     @keyframes masuk { from { opacity:0; transform:translateX(24px); } to { opacity:1; transform:none; } }
 
-    .pilihan { width:100%; display:flex; align-items:center; gap:16px; text-align:left; cursor:pointer;
-               padding:18px; margin-bottom:14px; background:#fff; font:inherit; color:inherit;
-               border:1px solid var(--garis); border-radius:12px;
-               transition:transform .2s, box-shadow .2s, border-color .2s; }
-    .pilihan:hover { transform:translateY(-3px); border-color:var(--hijau); box-shadow:0 8px 20px rgba(18,61,53,.12); }
-    .pilihan .ikon { width:48px; height:48px; border-radius:12px; flex:none; display:grid; place-items:center;
-                     background:#e8f1ee; color:var(--hijau); font-size:1.4rem; }
-    .pilihan b { display:block; margin-bottom:2px; }
-    .pilihan span { color:var(--abu); font-size:.88rem; }
-    .pilihan .panah { margin-left:auto; color:var(--abu); }
-
-    .kembali { background:none; border:0; padding:0; margin-bottom:16px; cursor:pointer;
-               color:var(--abu); font:inherit; font-size:.9rem; }
-    .kembali:hover { color:var(--hijau); }
-
     .tab { display:flex; gap:6px; padding:4px; background:#f0f1ed; border-radius:10px; margin-bottom:18px; }
     .tab button { flex:1; padding:9px; border:0; border-radius:8px; background:none; cursor:pointer;
                   font:inherit; font-weight:600; color:var(--abu); }
@@ -123,6 +103,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .field input:focus { border-color:var(--hijau); box-shadow:0 0 0 3px rgba(18,61,53,.12); background:#fff; }
     .mata { position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:0;
             padding:8px; cursor:pointer; color:var(--abu); }
+
+    .lupa {
+        text-align: right;
+        margin: -6px 0 14px;
+        font-size: .86rem;
+    }
+    .lupa a {
+        color: var(--hijau);
+        text-decoration: none;
+        font-weight: 600;
+    }
+    .lupa a:hover {
+        text-decoration: underline;
+    }
     .tombol { width:100%; padding:13px; border:0; border-radius:10px; cursor:pointer; font:inherit;
               font-weight:600; color:#fff; background:var(--hijau); transition:background .2s; margin-top:4px; }
     .tombol:hover { background:var(--hijau-gelap); }
@@ -156,34 +150,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </aside>
 
     <main class="kanan">
-
-      <!-- Tampilan 1: pilih peran -->
-      <section id="pilih" class="tampil">
+      <section id="form-wrap" class="tampil">
         <div class="label-atas"><i class="bi bi-shield-lock"></i> Portal Akses</div>
-        <h1>Selamat Datang</h1>
-        <p class="ket">Pilih jenis akun untuk melanjutkan.</p>
-
-        <button type="button" class="pilihan" data-pilih="admin">
-          <div class="ikon"><i class="bi bi-person-gear"></i></div>
-          <div><b>Login sebagai Admin</b><span>Kelola data buku, anggota, dan laporan</span></div>
-          <i class="bi bi-arrow-right panah"></i>
-        </button>
-
-        <button type="button" class="pilihan" data-pilih="anggota">
-          <div class="ikon"><i class="bi bi-person-badge"></i></div>
-          <div><b>Login sebagai Anggota Perpus</b><span>Masuk atau daftar sebagai anggota</span></div>
-          <i class="bi bi-arrow-right panah"></i>
-        </button>
-      </section>
-
-      <!-- Tampilan 2: form -->
-      <section id="form-wrap" hidden>
-        <button type="button" class="kembali" id="kembali"><i class="bi bi-arrow-left"></i> Kembali</button>
-        <div class="label-atas" id="label-peran"></div>
         <h1 id="judul-form"></h1>
         <p class="ket" id="ket-form"></p>
 
-        <div class="tab" data-peran="anggota">
+        <div class="tab">
           <button type="button" data-tab="masuk">Masuk</button>
           <button type="button" data-tab="daftar">Daftar</button>
         </div>
@@ -195,19 +167,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <div class="alert hijau" role="status"><i class="bi bi-check-circle"></i> <?= e($info) ?></div>
         <?php endif; ?>
 
-        <div data-peran="anggota">
-          <div class="sosial">
-            <a href="<?= BASE_URL ?>index.php?hal=login&aksi=oauth&provider=google"><i class="bi bi-google"></i> Google</a>
-            <a href="<?= BASE_URL ?>index.php?hal=login&aksi=oauth&provider=github"><i class="bi bi-github"></i> GitHub</a>
-          </div>
-          <div class="atau">atau dengan email</div>
+        <div class="sosial">
+          <a href="<?= BASE_URL ?>index.php?hal=login&aksi=oauth&provider=google"><i class="bi bi-google"></i> Google</a>
+          <a href="<?= BASE_URL ?>index.php?hal=login&aksi=oauth&provider=github"><i class="bi bi-github"></i> GitHub</a>
         </div>
+        <div class="atau">atau dengan email</div>
 
         <form method="post" id="form-login">
-          <input type="hidden" name="peran" id="peran" value="<?= e($peran) ?>">
           <input type="hidden" name="mode" id="mode" value="<?= e($mode) ?>">
 
-          <div data-peran="anggota" data-mode="daftar">
+          <div data-mode="daftar">
             <label for="nama">Nama lengkap</label>
             <div class="field">
               <i class="bi bi-person"></i>
@@ -220,7 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <div class="field">
             <i class="bi bi-envelope"></i>
             <input type="email" id="email" name="email" placeholder="nama@email.com"
-                   value="<?= e($_POST['email'] ?? '') ?>" required>
+                   value="<?= e($_POST['email'] ?? '') ?>" required autofocus>
           </div>
 
           <label for="password">Kata sandi</label>
@@ -232,7 +201,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </button>
           </div>
 
-          <div data-peran="anggota" data-mode="daftar">
+          <div class="lupa" data-mode="masuk">
+              <a href="<?= BASE_URL ?>index.php?hal=login&aksi=lupa">Lupa kata sandi?</a>
+          </div>
+
+          <div data-mode="daftar">
             <label for="password2">Ulangi kata sandi</label>
             <div class="field">
               <i class="bi bi-lock-fill"></i>
@@ -243,68 +216,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <button type="submit" class="tombol" id="tombol-masuk"></button>
         </form>
       </section>
-
     </main>
   </div>
 
   <script>
-    const state = { peran: '<?= e($peran) ?>', mode: '<?= e($mode) ?>' };
+    let mode = '<?= e($mode) ?>';
     const teks = {
-      admin:   { label: 'Portal Admin',   judul: 'Login Admin',
-                 ket: 'Masuk ke konsol administrator untuk mengelola data perpustakaan.' },
-      anggota: { masuk:  { judul: 'Masuk Anggota',  ket: 'Masuk dengan akun anggota perpustakaan kamu.' },
-                 daftar: { judul: 'Daftar Anggota', ket: 'Buat akun baru untuk menjadi anggota perpustakaan.' } }
+      masuk:  { judul: 'Selamat Datang', ket: 'Masuk ke akun kamu untuk melanjutkan.', tombol: 'Masuk' },
+      daftar: { judul: 'Buat Akun Anggota', ket: 'Daftar untuk menjadi anggota perpustakaan.', tombol: 'Daftar Sekarang' }
     };
     const $ = id => document.getElementById(id);
 
-    function animasi(el) {
-      el.hidden = false;
-      el.classList.remove('tampil'); void el.offsetWidth; el.classList.add('tampil');
-    }
-
     function render() {
-      const { peran, mode } = state;
-      $('peran').value = peran;
       $('mode').value = mode;
+      $('judul-form').textContent = teks[mode].judul;
+      $('ket-form').textContent = teks[mode].ket;
+      $('tombol-masuk').textContent = teks[mode].tombol;
 
-      // tampilkan elemen sesuai peran/mode; input di elemen tersembunyi dimatikan
-      document.querySelectorAll('[data-peran], [data-mode]').forEach(el => {
-        const ok = (!el.dataset.peran || el.dataset.peran === peran) &&
-                   (!el.dataset.mode  || el.dataset.mode  === mode);
+      // field khusus daftar: tampil hanya di mode daftar, dan dimatikan saat tersembunyi
+      document.querySelectorAll('[data-mode]').forEach(el => {
+        const ok = el.dataset.mode === mode;
         el.hidden = !ok;
         el.querySelectorAll('input').forEach(i => i.disabled = !ok);
       });
       document.querySelectorAll('[data-tab]').forEach(b =>
         b.classList.toggle('aktif', b.dataset.tab === mode));
-
-      if (peran === 'admin') {
-        $('label-peran').textContent = teks.admin.label;
-        $('judul-form').textContent  = teks.admin.judul;
-        $('ket-form').textContent    = teks.admin.ket;
-        $('tombol-masuk').textContent = 'Masuk sebagai Admin';
-      } else {
-        $('label-peran').textContent = 'Portal Anggota';
-        $('judul-form').textContent  = teks.anggota[mode].judul;
-        $('ket-form').textContent    = teks.anggota[mode].ket;
-        $('tombol-masuk').textContent = mode === 'daftar' ? 'Daftar Sekarang' : 'Masuk';
-      }
     }
 
-    function buka(peran, mode = 'masuk') {
-      state.peran = peran; state.mode = mode;
-      $('pilih').hidden = true;
-      render();
-      animasi($('form-wrap'));
-    }
-
-    document.querySelectorAll('[data-pilih]').forEach(b =>
-      b.addEventListener('click', () => buka(b.dataset.pilih)));
     document.querySelectorAll('[data-tab]').forEach(b =>
-      b.addEventListener('click', () => { state.mode = b.dataset.tab; render(); }));
-    $('kembali').addEventListener('click', () => {
-      $('form-wrap').hidden = true;
-      animasi($('pilih'));
-    });
+      b.addEventListener('click', () => { mode = b.dataset.tab; render(); }));
 
     $('toggle-pass').addEventListener('click', () => {
       const tampil = $('password').type === 'password';
@@ -317,9 +257,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       t.disabled = true; t.textContent = 'Memproses...';
     });
 
-    <?php if ($peran || $galat || $info): ?>
-    buka('<?= $peran ?: 'anggota' ?>', '<?= e($mode) ?>');
-    <?php endif; ?>
+    render();
   </script>
 </body>
 </html>
